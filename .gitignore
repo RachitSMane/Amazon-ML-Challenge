@@ -1,0 +1,18 @@
+# Challenge data (share via the team leader, not git)
+student_resource/dataset/
+*.tsv
+!student_resource/utils/*
+
+# Generated outputs / caches
+output/
+artifacts/
+*.npy
+*.npz
+*.parquet
+*.pkl
+__pycache__/
+.ipynb_checkpoints/
+
+# macOS clutter
+.DS_Store
+._*

@@ -65,6 +65,11 @@ raw TSVs
 - Token blocking on rare tokens and numbers (postcode/PIN, house numbers).
 - Restrict to the same country where the country label is reliable (check the data first; don't hard-code US/India).
 - Track **pair recall** and **candidates per S1** on validation. Target ≥ 98% recall with a small K.
+- **Scale:** the validator says the full test set is **~1.7M entities**. Blocking has to be sub-quadratic:
+  partition by country (and a coarse geo key such as postcode prefix or city token), use sparse top-K
+  (`sparse_dot_topn`) or ANN (FAISS/hnswlib), keep K small (≈10–30), and cache everything to disk.
+  Embedding 1.7M strings on CPU is slow (probably hours), so prefer a small model, or a free GPU (Colab/Kaggle) for that step.
+- Write outputs with plain Python string joins, not pandas quoting, and validate with `--check-ids` only when memory allows.
 
 ### 3. Features (per S1–candidate pair)
 - Name: Jaro-Winkler, Levenshtein ratio, token-set/sort ratio, Jaccard, TF-IDF cosine, and the same after removing legal suffixes;
