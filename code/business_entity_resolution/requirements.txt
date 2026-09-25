@@ -1,0 +1,3 @@
+# Python >= 3.8
+# The current tools (src/evaluation.py, src/analyze_dataset.py) use the standard library only.
+# Pin the model dependencies here (package==version) once the architecture is chosen.

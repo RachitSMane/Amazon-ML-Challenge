@@ -1,5 +1,9 @@
 # Amazon ML Challenge 2026: Business Entity Resolution
 
+> **Not authoritative.** This is the team's working plan. The verified official rules are in
+> `REQUIREMENTS_CHECKLIST.md`; where the two conflict, the checklist and the official documents win.
+> The design sections below are provisional until the dataset analysis (`analyze_dataset.py`) has run.
+
 ## The task in one paragraph
 
 We get business records (`entity_id`, `business_name`, `business_address`, `country`) from 3 sources.
@@ -54,7 +58,7 @@ raw TSVs
   -> 2. block       (union of several cheap retrievers per S1 record, top-K each)
   -> 3. pair features
   -> 4. pair classifier  (GBDT; optional cross-encoder)
-  -> 5. decide      (thresholds + 1-to-1 constraints, tuned for macro F0.5)
+  -> 5. decide      (thresholds + optional 1-to-1 constraint IF the data supports it, tuned for macro F0.5)
   -> output/candidate_pairs.tsv, output/matching_results.tsv
 ```
 
@@ -64,10 +68,12 @@ raw TSVs
   on name+address, then kNN.
 - Token blocking on rare tokens and numbers (postcode/PIN, house numbers).
 - Restrict to the same country where the country label is reliable (check the data first; don't hard-code US/India).
-- Track **pair recall** and **candidates per S1** on validation. Target ≥ 98% recall with a small K.
+- Track **pair recall** and **candidates per S1** on validation (`evaluation.py --candidates`).
+  **Official update:** a smaller candidate set per S1 is ranked higher, and `candidate_pairs.tsv` is reviewed.
+  So choose K from the measured recall vs set-size curve, not a fixed target.
 - **Scale:** the validator says the full test set is **~1.7M entities**. Blocking has to be sub-quadratic:
   partition by country (and a coarse geo key such as postcode prefix or city token), use sparse top-K
-  (`sparse_dot_topn`) or ANN (FAISS/hnswlib), keep K small (≈10–30), and cache everything to disk.
+  (`sparse_dot_topn`) or ANN (FAISS/hnswlib), keep K as small as the recall curve allows (the old ≈10–30 guess is superseded), and cache everything to disk.
   Embedding 1.7M strings on CPU is slow (probably hours), so prefer a small model, or a free GPU (Colab/Kaggle) for that step.
 - Write outputs with plain Python string joins, not pandas quoting, and validate with `--check-ids` only when memory allows.
 
@@ -87,7 +93,8 @@ raw TSVs
 - A global threshold `t` on p(match), probably high because F0.5 favours precision.
 - The **singleton gate**: if max p over an S1's candidates is below `t_empty`, predict empty.
 - Keep extra matches only if p > t and p is within a margin of the best one.
-- **Each S2/S3 record goes to at most one S1** (S1 is deduplicated), so assign it to its best-scoring S1.
+- **Hypothesis, not a rule:** each S2/S3 record belongs to at most one S1 (S1 is deduplicated). Only if the
+  ground truth confirms it (`ONE_MATCH_ASSUMPTION_…` in `analyze_dataset.py`), assign each S2/S3 to its best-scoring S1.
 - Grid-search `t`, `t_empty` and the margin on out-of-fold predictions.
 
 ### Validation
@@ -100,7 +107,7 @@ raw TSVs
 | When | Goal | Submissions |
 |---|---|---|
 | **Day 1 (Fri) evening** | Repo, data loading, EDA, scorer, validator, normalisation, TF-IDF blocking, simple-rules baseline, **first valid submission** | 1–2 |
-| **Day 2 (Sat)** | Embedding blocking, full feature set, LightGBM, OOF threshold tuning, 1-to-1 assignment | 3–5 |
+| **Day 2 (Sat)** | Embedding blocking, full feature set, LightGBM, OOF threshold tuning, 1-to-1 assignment (if validated) | 3–5 |
 | **Day 3 (Sun) until ~18:00** | Improvements (cross-encoder / more features), France robustness checks, final submission | 3–5 |
 | **Day 3 (Sun) 18:00–23:00** | Freeze code, clean README + requirements, fill in Documentation_template.md, build the zip, dry-run reproduction | – |
 
