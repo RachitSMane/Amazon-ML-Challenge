@@ -1,7 +1,6 @@
 # Verified Requirements Checklist: Amazon ML Challenge 2026
 
 Sources, re-read on 2026-09-25:
-
 - **[R]** `student_resource/README.md`: official problem statement
 - **[C]** `6ab674645103d_emails_comms_amazon_ml_challenge_2026.pdf`: the problem statement plus an **update banner**
 - **[G]** `6ab56657b4f1a_guidelines_and_key_instructions_amazon_ml_challenge_2026.pdf`: organiser guidelines

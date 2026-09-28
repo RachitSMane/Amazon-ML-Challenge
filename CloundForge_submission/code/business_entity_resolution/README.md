@@ -4,9 +4,8 @@ The team's solution for the Amazon ML Challenge 2026 (Business Entity Resolution
 This folder is what ships in the final zip as `code/business_entity_resolution/`
 (see `student_resource/README.md`, "Final Submission Package").
 
-> **Status: final.** Submission v1 was produced by `ber.predict` (stage 1 + stage 2, section 9).
-> Submission v2 re-scores the same stage-1 candidates with a stage-2 model trained on 100k S1
-> (section 10). The second submission is a v3/v1 hybrid with Stage-1 cap 1000 / top-200 (section 11).
+> **Status: final.** The submitted `output/` files were produced by `ber.predict` (stage 1 +
+> stage 2, see section 9 for the end-to-end reproduction commands).
 
 ## Layout
 
@@ -289,68 +288,3 @@ Optional helpers (not needed for the submitted files):
   the reference run's checkpoints).
 - `python -m ber.assemble_partial --run-name full --out <dir> --validate` writes a valid
   submission from the blocks finished so far (unscored S1 get empty rows).
-
-## 10. v2 submission (stage-2 retrained on 100k S1, threshold 0.69)
-
-v2 changes **only stage 2**. Retrieval (G+Indic), stage 1 (`model_GI_unweighted.txt`, 400 trees,
-cap 500, top 50), the 62 stage-2 features, the one-target → one-S1 rule and the output format
-are identical to v1, so `candidate_pairs.tsv` is the same candidate set as v1.
-
-| | v1 | v2 |
-|---|---|---|
-| Stage-2 training S1 (folds 1-4, excluding the stage-1 training S1) | 60,000 | 100,000 |
-| Stage-2 training rows / trees (early stopping) | 2.65 M / 1,336 | 4.42 M / 1,533 |
-| Threshold (macro-F0.5 optimum on the 20k fold-0 dev S1) | 0.63 | 0.69 |
-| Dev macro F0.5 (same 20,000 dev S1) | 0.92694 | 0.92813 |
-
-Paired bootstrap on the same dev S1 (`experiments/e06_paired_bootstrap.py`): +0.00119, 95% CI
-[+0.00037, +0.00197]. LightGBM parameters are unchanged (`ranker.LGB_PARAMS`).
-
-```bash
-cd code/business_entity_resolution/src
-
-# steps 1-4 of section 9, then: stage 2 on 100k S1 (writes rows.npz for variants/bootstrap)
-python ../experiments/e04_matcher.py --train 100000 --valid 20000 --out-name v2_t100000_v20000 --save-rows
-python ../experiments/e06_paired_bootstrap.py --rows-from v2_t100000_v20000 --a full_t60000_v20000 --b v2_t100000_v20000
-
-# test inference, one pass (identical result to the two commands below)
-python -m ber.predict --split test --run-name v2_direct --stage2-dir ../../../work/experiments/matcher/v2_t100000_v20000 --out ../../../output_v2 --validate
-
-# what was actually run: re-score the v1 run's stage-1 top-50 with the v2 stage-2 model
-# (skips the stage-1 LightGBM; --compare with the v1 model reproduces v1's p exactly), then finalize
-python -m ber.rescore --ref-run full --run-name v2 --stage2-dir ../../../work/experiments/matcher/v2_t100000_v20000 [--start A --stop B]
-python -m ber.rescore --ref-run full --run-name v2 --stage2-dir ../../../work/experiments/matcher/v2_t100000_v20000 --finalize --out ../../../output_v2 --validate
-```
-
-## 11. Second submission: v3 / v1 hybrid (cap 1000, top 200 where scored)
-
-**v3** changes Stage 1's cap from 500 to **1000** and top-K from 50 to **200** (same retrieval, same
-`model_GI_unweighted.txt` with 400 trees), and retrains Stage 2 (same 62 features and LightGBM
-parameters) on these candidates for 60k training S1:
-
-| Same 20,000 fold-0 dev S1 | v1 | v2 | v3 |
-|---|---|---|---|
-| Stage-1 cap / top-K | 500 / 50 | 500 / 50 | 1000 / 200 |
-| Top-K pair recall / oracle F0.5 | 0.890 / 0.9534 | same | 0.920 / 0.9685 |
-| Stage-2 training S1 / trees | 60k / 1,336 | 100k / 1,533 | 60k / 523 |
-| Threshold (dev optimum) | 0.63 | 0.69 | 0.66 |
-| Macro F0.5 | 0.92694 | 0.92813 | **0.93766** |
-
-A full v3 test pass needs ~20 ms/S1 (~10 h: the Stage-1 LightGBM on 1000 candidates dominates), so
-the second submission is a **hybrid**: v3 scored the test blocks it could before the deadline
-(India first), and every other S1 keeps its v1 prediction. `ber.assemble_hybrid` takes each block
-from the v3 run if checkpointed, else from the v1 run, keeps pairs with `p >=` the threshold of the
-model that scored them (0.66 / 0.63), then applies the one-target → one-S1 rule over the whole test
-set; each S1's candidate list is the one its model scored. With no v3 blocks it reproduces the v1
-files byte-for-byte.
-
-```bash
-cd code/business_entity_resolution/src
-# v3 Stage 2 (writes work/experiments/stage1_400_cap1000_top200/t60000_v20000/)
-python ../experiments/e04_matcher.py --train 60000 --valid 20000 --cap 1000 --top-k 200 --out-name t60000_v20000 --out-dir experiments/stage1_400_cap1000_top200/t60000_v20000
-# v3 test scoring of plan blocks [519, 2139) = India, then [2139, 3466) = US, until a clock time
-python -m ber.score_blocks --ref-run full --run-name v3 --run-dir experiments/stage1_400_cap1000_top200/test_run --stage2-dir ../../../work/experiments/stage1_400_cap1000_top200/t60000_v20000 --start 519 --stop 2139 --until 22:55
-# hybrid assembly + official validator
-python -m ber.assemble_hybrid --primary experiments/stage1_400_cap1000_top200/test_run --primary-stage2 ../../../work/experiments/stage1_400_cap1000_top200/t60000_v20000 --fallback inference/test/full --fallback-stage2 ../../../work/experiments/matcher/full_t60000_v20000 --out ../../../work/experiments/stage1_400_cap1000_top200/output_hybrid --validate
-```
-With enough time, `--start 0 --stop 3466` (no `--until`) scores the whole test set with v3.

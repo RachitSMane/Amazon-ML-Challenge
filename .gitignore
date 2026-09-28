@@ -27,6 +27,8 @@ artifacts/
 submissions/
 
 # Model files, features and caches
+# Pipeline work dir (default of BER_WORK_DIR): Parquet caches, all regenerable
+work/
 models/
 cache/
 .cache/
